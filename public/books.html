@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catalog — Bibliotheca</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div id="ledger-bar" class="ledger-bar"></div>
+  <div class="app-shell" id="shell"></div>
+
+  <div class="modal-overlay" id="book-modal">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="modal-title">Add Title</h3>
+        <button class="modal-close" onclick="closeModal('book-modal')">&times;</button>
+      </div>
+      <form id="book-form">
+        <div class="modal-body">
+          <div class="form-grid">
+            <div class="field full">
+              <label>Title</label>
+              <input type="text" id="f-title" required>
+            </div>
+            <div class="field">
+              <label>Author</label>
+              <input type="text" id="f-author" required>
+            </div>
+            <div class="field">
+              <label>ISBN</label>
+              <input type="text" id="f-isbn" class="mono" required>
+            </div>
+            <div class="field">
+              <label>Genre</label>
+              <input type="text" id="f-genre" required>
+            </div>
+            <div class="field">
+              <label>Publication Year</label>
+              <input type="number" id="f-year" min="1000" max="2100" required>
+            </div>
+            <div class="field">
+              <label>Shelf Location</label>
+              <input type="text" id="f-shelf" placeholder="e.g. F-12" required>
+            </div>
+            <div class="field">
+              <label>Total Copies</label>
+              <input type="number" id="f-copies" min="1" required>
+            </div>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn ghost" onclick="closeModal('book-modal')">Cancel</button>
+          <button type="submit" class="btn burgundy">Save Title</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+<script src="assets/app.js"></script>
+<script>
+startPage('books', load);
+
+let books = [];
+let editingId = null;
+let searchTerm = '';
+let genreFilter = 'All';
+
+async function load(){
+  books = await api('GET', '/api/books');
+  render();
+}
+
+function render(){
+  const genres = ['All', ...new Set(books.map(b => b.genre))];
+  const q = searchTerm.toLowerCase();
+
+  const filtered = books.filter(b => {
+    const matchesTerm = !q || (b.title + ' ' + b.author + ' ' + b.isbn).toLowerCase().includes(q);
+    const matchesGenre = genreFilter === 'All' || b.genre === genreFilter;
+    return matchesTerm && matchesGenre;
+  });
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="page-head">
+      <div>
+        <div class="eyebrow">Catalog · ${books.length} Titles</div>
+        <h1>Book Catalog</h1>
+        <p class="desc">Search, shelve, and manage every title held in the collection.</p>
+      </div>
+      <button class="btn burgundy" onclick="openAddModal()">+ Add Title</button>
+    </div>
+
+    <div class="panel">
+      <div class="panel-body">
+        <div class="search-row">
+          <input type="search" id="search-input" placeholder="Search by title, author, or ISBN…" value="${esc(searchTerm)}">
+          <select id="genre-select">
+            ${genres.map(g => `<option value="${esc(g)}" ${g===genreFilter?'selected':''}>${esc(g)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-body" style="padding-top:8px;">
+        ${filtered.length ? `
+        <table class="ledger">
+          <thead>
+            <tr><th>Title</th><th>Author</th><th>Genre</th><th>ISBN</th><th>Shelf</th><th>Availability</th><th></th></tr>
+          </thead>
+          <tbody>
+            ${filtered.map(b => `
+              <tr>
+                <td><strong>${esc(b.title)}</strong><div class="muted small">${b.year}</div></td>
+                <td>${esc(b.author)}</td>
+                <td>${esc(b.genre)}</td>
+                <td class="mono small">${esc(b.isbn)}</td>
+                <td class="mono small">${esc(b.shelf)}</td>
+                <td>
+                  <span class="badge ${b.available>0?'available':'issued'}">
+                    ${b.available>0 ? b.available+' / '+b.copies+' available' : 'all issued'}
+                  </span>
+                </td>
+                <td>
+                  <div class="flex">
+                    <button class="btn ghost sm" onclick="openEditModal(${b.id})">Edit</button>
+                    <button class="btn danger sm" onclick="deleteBook(${b.id})">Delete</button>
+                  </div>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        ` : `<div class="empty-state"><div class="glyph">📖</div><div>No titles match your search.</div></div>`}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('search-input').addEventListener('input', e => {
+    searchTerm = e.target.value; render();
+    const el = document.getElementById('search-input');
+    el.focus(); el.setSelectionRange(el.value.length, el.value.length);
+  });
+  document.getElementById('genre-select').addEventListener('change', e => {
+    genreFilter = e.target.value; render();
+  });
+}
+
+function openAddModal(){
+  editingId = null;
+  document.getElementById('modal-title').textContent = 'Add Title';
+  document.getElementById('book-form').reset();
+  openModal('book-modal');
+}
+
+function openEditModal(id){
+  const b = books.find(x => x.id === id);
+  if(!b) return;
+  editingId = id;
+  document.getElementById('modal-title').textContent = 'Edit Title';
+  document.getElementById('f-title').value = b.title;
+  document.getElementById('f-author').value = b.author;
+  document.getElementById('f-isbn').value = b.isbn;
+  document.getElementById('f-genre').value = b.genre;
+  document.getElementById('f-year').value = b.year;
+  document.getElementById('f-shelf').value = b.shelf;
+  document.getElementById('f-copies').value = b.copies;
+  openModal('book-modal');
+}
+
+async function deleteBook(id){
+  if(!confirm('Remove this title from the catalog? This cannot be undone.')) return;
+  try{
+    await api('DELETE', '/api/books/' + id);
+    toast('Title removed from catalog.');
+    await load();
+  }catch(e){ toast(e.message); }
+}
+
+document.getElementById('book-form').addEventListener('submit', async function(e){
+  e.preventDefault();
+  const payload = {
+    title: document.getElementById('f-title').value,
+    author: document.getElementById('f-author').value,
+    isbn: document.getElementById('f-isbn').value,
+    genre: document.getElementById('f-genre').value,
+    year: document.getElementById('f-year').value,
+    shelf: document.getElementById('f-shelf').value,
+    copies: document.getElementById('f-copies').value
+  };
+  try{
+    if(editingId){
+      await api('PUT', '/api/books/' + editingId, payload);
+      toast('Title updated.');
+    } else {
+      await api('POST', '/api/books', payload);
+      toast('New title added to the catalog.');
+    }
+    closeModal('book-modal');
+    await load();
+  }catch(err){ toast(err.message); }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Bibliotheca</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div id="ledger-bar" class="ledger-bar"></div>
+  <div class="app-shell" id="shell"></div>
+
+<script src="assets/app.js"></script>
+<script>
+startPage('dashboard', render);
+
+async function render(){
+  const { stats, recent, genres } = await api('GET', '/api/dashboard');
+  const maxGenre = Math.max(...genres.map(g => g.copies), 1);
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="page-head">
+      <div>
+        <div class="eyebrow">Overview · Ledger Entry ${todayISO()}</div>
+        <h1>Reading Room Dashboard</h1>
+        <p class="desc">A day's snapshot of the collection, circulation, and membership standing.</p>
+      </div>
+      <a href="transactions.html" class="btn burgundy">+ New Circulation Entry</a>
+    </div>
+
+    <div class="stat-grid">
+      <div class="index-card">
+        <div class="label">Titles in Catalog</div>
+        <div class="value">${stats.titles}</div>
+        <div class="trend">${stats.totalCopies} total copies held</div>
+      </div>
+      <div class="index-card">
+        <div class="label">Copies Available</div>
+        <div class="value">${stats.available}</div>
+        <div class="trend up">on the shelf right now</div>
+      </div>
+      <div class="index-card">
+        <div class="label">Currently Issued</div>
+        <div class="value">${stats.issued}</div>
+        <div class="trend ${stats.overdue ? 'warn':''}">${stats.overdue} overdue</div>
+      </div>
+      <div class="index-card">
+        <div class="label">Active Members</div>
+        <div class="value">${stats.activeMembers}</div>
+        <div class="trend">of ${stats.totalMembers} registered</div>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1.5fr 1fr; gap:24px; align-items:start;">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Recent Circulation</h3>
+          <a href="transactions.html" class="btn ghost sm">View all</a>
+        </div>
+        <div class="panel-body" style="padding-top:6px;">
+          <table class="ledger">
+            <thead><tr><th>Book</th><th>Member</th><th>Issued</th><th>Due</th><th>Status</th></tr></thead>
+            <tbody>
+              ${recent.map(l => `<tr>
+                  <td>${esc(l.bookTitle)}</td>
+                  <td>${esc(l.memberName)}</td>
+                  <td class="mono small">${fmtDate(l.issueDate)}</td>
+                  <td class="mono small">${fmtDate(l.dueDate)}</td>
+                  <td><span class="badge ${l.status.toLowerCase()}">${l.status}</span></td>
+                </tr>`).join('') || `<tr><td colspan="5" class="muted">No circulation activity yet.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h3>Collection by Genre</h3></div>
+        <div class="panel-body">
+          ${genres.map(g => `
+            <div style="margin-bottom:12px;">
+              <div class="flex small" style="justify-content:space-between; margin-bottom:4px;">
+                <span>${esc(g.genre)}</span><span class="mono muted">${g.copies}</span>
+              </div>
+              <div style="background:var(--sage); border-radius:2px; height:8px; overflow:hidden;">
+                <div style="width:${(g.copies/maxGenre*100).toFixed(0)}%; background:var(--brass); height:100%;"></div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+</script>
+</body>
+</html>
